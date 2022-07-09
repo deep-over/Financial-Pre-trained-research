@@ -41,25 +41,28 @@ def split_sentence(doc, i, total_count, start_time):
     
     return sentence_list
 
-def save_split_sentences():
+def save_split_sentences(path, f_name):
     json_file_list = glob.glob(os.path.join(path,f_name))
     json_file_list = sorted(json_file_list)
     pprint(json_file_list)
+
     for json_file in json_file_list:
+        list_to_json_file(json_file)
         
-        fname = json_file.rsplit('/')[-1]
+
+def list_to_json_file(json_file):
+        fname = json_file.rsplit('/')[-1].split('.')[0]
         pprint(f'This File name is {fname}')
         total_list = list()
-        
         with open(os.path.join(json_file), 'r', encoding='utf-8') as file:
             doc_list = json.load(file)
             
         start_time = time.time()
         
-        if fname in 'Edgar_Filings_Corpus':
-            pool = concurrent.futures.ProcessPoolExecutor(max_workers=5)
+        if fname in 'edgar_filings_corpus':
+            pool = concurrent.futures.ProcessPoolExecutor(max_workers=10)
         else:
-            pool = concurrent.futures.ProcessPoolExecutor(max_workers=30)
+            pool = concurrent.futures.ProcessPoolExecutor(max_workers=10)
         
         procs = []
         for i in range(len(doc_list)):
@@ -76,11 +79,4 @@ if __name__ == "__main__":
     
     path, f_name = "/home/ailab/Desktop/JY/corpus/","*.json"
 
-    data_list = load_dataset(path, 'Edgar_Filings_Corpus.json')
-
-    for data in data_list:
-        pprint(data)
-
-        
-            
-    
+    save_split_sentences(path, 'edgar_filings_corpus.json')    
