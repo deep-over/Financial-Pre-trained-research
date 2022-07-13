@@ -1,0 +1,91 @@
+version: 2.1
+
+executors:
+  python-executor:
+    working_directory: ~/2021-dialogue-summary-competition
+    docker:
+      - image: circleci/python:3.8
+
+commands:
+  install-packages:
+    steps:
+      - checkout
+
+      - restore_cache:
+          key: deps-{{ checksum "requirements.txt" }}-{{ checksum "requirements-dev.txt" }}
+
+      - run:
+          name: Create Virtual Environment and Install Dependencies
+          command: |
+            virtualenv env
+            source env/bin/activate
+            pip install -r requirements.txt -r requirements-dev.txt
+
+      - save_cache:
+          key: deps-{{ checksum "requirements.txt" }}-{{ checksum "requirements-dev.txt" }}
+          paths:
+            - "env"
+
+jobs:
+  run-test:
+    executor: python-executor
+    steps:
+      - install-packages
+
+      - run:
+          name: Run Tests
+          command: |
+            source env/bin/activate
+            pytest --cov-branch --cov summarizer
+
+      - run:
+          name: Upload coverage report
+          command: |
+            source env/bin/activate
+            codecov
+
+  check-linting:
+    executor: python-executor
+    steps:
+      - install-packages
+
+      - run:
+          name: Run black, isort
+          command: |
+            source env/bin/activate
+            black --check summarizer tests
+            isort summarizer tests
+
+  docker-build-push:
+    executor: python-executor
+
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
+      - run:
+          name: Docker Image Build and Push
+          command: |
+            echo $DOCKER_ACCESS_TOKEN | docker login --username $DOCKER_USER_NAME --password-stdin
+            DOCKER_IMAGE_NAME="$DOCKER_USER_NAME/$CIRCLE_PROJECT_REPONAME"
+            [[ -z "$CIRCLE_TAG" ]] && TAG="latest" || TAG="$CIRCLE_TAG"
+            docker build -t $DOCKER_IMAGE_NAME:${TAG} . -f docker/Dockerfile
+            docker push $DOCKER_IMAGE_NAME:${TAG}
+            docker build -t $DOCKER_IMAGE_NAME:${TAG}-gpu . -f docker/Dockerfile.gpu
+            docker push $DOCKER_IMAGE_NAME:${TAG}-gpu
+
+workflows:
+  main:
+    jobs:
+      - run-test
+      - check-linting
+      - docker-build-push:
+          context:
+            - Docker
+          filters:
+            tags:
+              only: /.+/
+            branches:
+              only: /master/
